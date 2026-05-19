@@ -12,6 +12,7 @@ local.properties
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # IDE
 .idea/
