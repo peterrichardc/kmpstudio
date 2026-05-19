@@ -48,6 +48,10 @@ The UI is Kotlin compiled to WebAssembly — not a JS bundle, not an Electron sh
 - **AI scaffold** — describe your app idea in plain English, the AI picks the right architecture, libraries and targets, then generates a complete ready-to-build KMP project
 - **Semantic search** — ask "where is X implemented?" in natural language, get the top matches ranked by an LLM with a one-line explanation per result
 
+<p align="center">
+  <img src="docs/how-it-works.png" width="860" alt="How it works — main flow" />
+</p>
+
 ---
 
 ## How KMP Studio compares
