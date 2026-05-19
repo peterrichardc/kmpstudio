@@ -1,0 +1,17 @@
+package {{packageName}}
+
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import {{packageName}}.domain.usecase.GetGreetingUseCase
+import {{packageName}}.data.repository.GreetingRepositoryImpl
+
+@Composable
+fun App() {
+    val useCase = GetGreetingUseCase(GreetingRepositoryImpl())
+    MaterialTheme {
+        Text(text = useCase())
+    }
+}

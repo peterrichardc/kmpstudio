@@ -1,0 +1,17 @@
+package {{packageName}}
+
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import {{packageName}}.feature.home.HomeStore
+
+@Composable
+fun App() {
+    val store = HomeStore()
+    val state by store.state.collectAsState()
+    MaterialTheme {
+        Text(text = state.greeting)
+    }
+}

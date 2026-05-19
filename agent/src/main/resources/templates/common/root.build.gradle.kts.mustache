@@ -1,0 +1,9 @@
+plugins {
+    kotlin("multiplatform")          version "{{kotlinVersion}}" apply false
+    kotlin("plugin.serialization")   version "{{kotlinVersion}}" apply false
+    id("org.jetbrains.compose")      version "{{composeVersion}}" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "{{kotlinVersion}}" apply false
+{{#android}}    id("com.android.application") version "{{agpVersion}}" apply false
+    id("com.android.library")        version "{{agpVersion}}" apply false
+{{/android}}{{#sqldelight}}    id("app.cash.sqldelight")         version "{{sqldelightVersion}}" apply false
+{{/sqldelight}}}

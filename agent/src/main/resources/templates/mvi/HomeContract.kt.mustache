@@ -1,0 +1,11 @@
+package {{packageName}}.feature.home
+
+data class HomeState(val greeting: String = "Hello from {{projectName}}!")
+
+sealed class HomeIntent {
+    data object Refresh : HomeIntent()
+}
+
+sealed class HomeEffect {
+    data class ShowError(val message: String) : HomeEffect()
+}

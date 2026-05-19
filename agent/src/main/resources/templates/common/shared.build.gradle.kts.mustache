@@ -1,0 +1,67 @@
+plugins {
+    kotlin("multiplatform")
+    kotlin("plugin.serialization")
+    id("org.jetbrains.compose")
+    id("org.jetbrains.kotlin.plugin.compose")
+{{#android}}    id("com.android.library")
+{{/android}}{{#sqldelight}}    id("app.cash.sqldelight")
+{{/sqldelight}}}
+
+kotlin {
+{{#android}}    androidTarget {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+{{/android}}{{#ios}}    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
+        it.binaries.framework {
+            baseName = "shared"
+            isStatic = true
+        }
+    }
+{{/ios}}{{#desktop}}    jvm("desktop")
+{{/desktop}}{{#web}}    wasmJs { browser() }
+{{/web}}
+    sourceSets {
+        commonMain.dependencies {
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+            implementation("com.russhwolf:multiplatform-settings:1.1.1")
+{{#ktor}}            implementation("io.ktor:ktor-client-core:{{ktorVersion}}")
+            implementation("io.ktor:ktor-client-content-negotiation:{{ktorVersion}}")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:{{ktorVersion}}")
+{{/ktor}}{{#koin}}            implementation("io.insert-koin:koin-core:{{koinVersion}}")
+{{/koin}}{{#voyager}}            implementation("cafe.adriel.voyager:voyager-navigator:{{voyagerVersion}}")
+{{/voyager}}        }
+{{#android}}        androidMain.dependencies {
+            implementation("androidx.activity:activity-compose:1.9.0")
+{{#ktor}}            implementation("io.ktor:ktor-client-okhttp:{{ktorVersion}}")
+{{/ktor}}{{#koin}}            implementation("io.insert-koin:koin-android:{{koinVersion}}")
+{{/koin}}        }
+{{/android}}{{#ios}}        iosMain.dependencies {
+{{#ktor}}            implementation("io.ktor:ktor-client-darwin:{{ktorVersion}}")
+{{/ktor}}        }
+{{/ios}}    }
+}
+
+{{#android}}android {
+    namespace = "{{packageName}}"
+    compileSdk = 35
+    defaultConfig { minSdk = 24 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+{{/android}}{{#sqldelight}}sqldelight {
+    databases {
+        create("AppDatabase") {
+            packageName.set("{{packageName}}.db")
+        }
+    }
+}
+{{/sqldelight}}

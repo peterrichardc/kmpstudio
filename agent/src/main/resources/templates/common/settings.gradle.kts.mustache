@@ -1,0 +1,21 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "{{projectName}}"
+
+include(":shared")
+{{#android}}include(":androidApp"){{/android}}
+{{#desktop}}include(":desktopApp"){{/desktop}}
+{{#web}}include(":webApp"){{/web}}

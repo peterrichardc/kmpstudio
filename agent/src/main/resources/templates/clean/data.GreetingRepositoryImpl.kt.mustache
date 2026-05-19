@@ -1,0 +1,9 @@
+package {{packageName}}.data.repository
+
+import {{packageName}}.domain.model.Greeting
+import {{packageName}}.domain.repository.GreetingRepository
+import {{packageName}}.getPlatform
+
+class GreetingRepositoryImpl : GreetingRepository {
+    override fun getGreeting() = Greeting("Hello from {{projectName}} on ${getPlatform()}!")
+}

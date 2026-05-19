@@ -1,0 +1,18 @@
+package {{packageName}}.feature.home
+
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+class HomeStore(private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default)) {
+    private val _state = MutableStateFlow(HomeState())
+    val state: StateFlow<HomeState> = _state.asStateFlow()
+
+    fun dispatch(intent: HomeIntent) {
+        when (intent) {
+            HomeIntent.Refresh -> _state.value = HomeState()
+        }
+    }
+}
