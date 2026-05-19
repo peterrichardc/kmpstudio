@@ -1,0 +1,35 @@
+# Gradle
+.gradle/
+build/
+**/build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Local config
+local.properties
+*.local.properties
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+**/.DS_Store
+
+# Kotlin/JS
+kotlin-js-store/
+.kotlin/
+
+# Node (frontend dev server)
+node_modules/
+npm-error.log
+
+# Environment / secrets
+.env
+*.env
+local.env
+
+# OS
+Thumbs.db
