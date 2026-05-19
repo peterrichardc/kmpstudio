@@ -49,7 +49,7 @@ The UI is Kotlin compiled to WebAssembly — not a JS bundle, not an Electron sh
 - **Semantic search** — ask "where is X implemented?" in natural language, get the top matches ranked by an LLM with a one-line explanation per result
 
 <p align="center">
-  <img src="docs/how-it-works.png" width="860" alt="How it works — main flow" />
+  <img width="832" height="472" alt="How it works — main flow" src="https://github.com/user-attachments/assets/a8481d06-7072-4eba-946c-f961dcaf1089" />
 </p>
 
 ---
