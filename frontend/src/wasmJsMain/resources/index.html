@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KMP Studio</title>
+
+  <!-- Monaco Editor styles -->
+  <link rel="stylesheet"
+        data-name="vs/editor/editor.main"
+        href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e2e; }
+    #compose-viewport { width: 100%; height: 100%; position: relative; }
+    .kmp-editor-host {
+      position: fixed;
+      background: #1e1e2e;
+      z-index: 100;
+      overflow: hidden;
+    }
+    .kmp-emulator-canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+<div id="compose-viewport"></div>
+
+<script>
+  window.kmpLog = function(msg) { console.log('%c[KMP]', 'color:#cba6f7', msg); };
+
+  window.__monacoReady = false;
+  window.__monacoReadyCallbacks = [];
+
+  function onMonacoReady(fn) {
+    if (window.__monacoReady) { fn(); return; }
+    window.__monacoReadyCallbacks.push(fn);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Monaco helpers (called from Kotlin via external fun)
+  // ─────────────────────────────────────────────────────────────────────────
+  window.kmpCreateEditorContainer = function (id, x, y, w, h) {
+    var existing = document.getElementById(id);
+    if (existing) return;
+    var dpr = window.devicePixelRatio || 1;
+    var div = document.createElement('div');
+    div.id = id;
+    div.className = 'kmp-editor-host';
+    div.style.cssText = 'left:' + (x/dpr) + 'px;top:' + (y/dpr) + 'px;width:' + (w/dpr) + 'px;height:' + (h/dpr) + 'px;';
+    document.body.appendChild(div);
+  };
+
+  window.kmpUpdateEditorContainer = function (id, x, y, w, h) {
+    var div = document.getElementById(id);
+    if (!div) return;
+    var dpr = window.devicePixelRatio || 1;
+    div.style.left   = (x/dpr) + 'px';
+    div.style.top    = (y/dpr) + 'px';
+    div.style.width  = (w/dpr) + 'px';
+    div.style.height = (h/dpr) + 'px';
+  };
+
+  window.kmpMonacoInit = function (id, value, language) {
+    onMonacoReady(function () {
+      var container = document.getElementById(id);
+      if (!container || window['__monaco_' + id]) return;
+      var editor = monaco.editor.create(container, {
+        value:               value || '',
+        language:            language || 'kotlin',
+        theme:               'vs-dark',
+        fontSize:            14,
+        fontFamily:          "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+        minimap:             { enabled: true },
+        automaticLayout:     true,
+        scrollBeyondLastLine: false,
+        renderWhitespace:    'boundary',
+        lineNumbers:         'on',
+        folding:             true,
+        wordWrap:            'off',
+        tabSize:             4
+      });
+      window['__monaco_' + id] = editor;
+    });
+  };
+
+  window.kmpMonacoGetValue = function (id) {
+    var e = window['__monaco_' + id];
+    return e ? e.getValue() : '';
+  };
+
+  window.kmpMonacoGetSelection = function (id) {
+    var e = window['__monaco_' + id];
+    if (!e) return '';
+    var sel = e.getSelection();
+    if (!sel) return '';
+    return e.getModel().getValueInRange(sel) || '';
+  };
+
+  window.kmpMonacoSetValue = function (id, value) {
+    var e = window['__monaco_' + id];
+    if (e) e.setValue(value);
+  };
+
+  window.kmpMonacoApplyDiff = function (id, hunksJson) {
+    var e = window['__monaco_' + id];
+    if (!e) return;
+    var hunks = JSON.parse(hunksJson);
+    var model = e.getModel();
+    model.applyEdits(hunks.map(function (h) {
+      return {
+        range: new monaco.Range(h.startLine, 1, h.startLine + h.oldLines.length, 1),
+        text: h.newLines.join('\n') + '\n'
+      };
+    }));
+  };
+
+  window.kmpMonacoSetMarkers = function (id, markersJson) {
+    var e = window['__monaco_' + id];
+    if (!e) return;
+    var model = e.getModel();
+    if (!model) return;
+    var raw = JSON.parse(markersJson);
+    var markers = raw.map(function (m) {
+      return {
+        severity:        m.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
+        message:         m.message,
+        startLineNumber: m.startLine,
+        startColumn:     m.startCol,
+        endLineNumber:   m.endLine,
+        endColumn:       m.endCol
+      };
+    });
+    monaco.editor.setModelMarkers(model, 'build', markers);
+  };
+
+  window.kmpMonacoDispose = function (id) {
+    var e = window['__monaco_' + id];
+    if (e) { e.dispose(); delete window['__monaco_' + id]; }
+    var container = document.getElementById(id);
+    if (container) container.remove();
+  };
+
+  window.kmpMonacoGoToLine = function (id, line) {
+    var e = window['__monaco_' + id];
+    if (!e) return;
+    e.revealLineInCenter(line);
+    e.setPosition({ lineNumber: line, column: 1 });
+    e.focus();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Diff preview overlay — full-screen Monaco diff editor with Accept/Reject
+  // ─────────────────────────────────────────────────────────────────────────
+  window.__kmpDiffResult = null;
+  window.__kmpDiffEditor = null;
+
+  window.kmpShowDiffPreview = function (fileName, original, modified, current, total) {
+    var existing = document.getElementById('kmp-diff-overlay');
+    if (existing) existing.remove();
+    if (window.__kmpDiffEditor) {
+      var prev = window.__kmpDiffEditor.getModel();
+      if (prev) { prev.original.dispose(); prev.modified.dispose(); }
+      window.__kmpDiffEditor.dispose();
+      window.__kmpDiffEditor = null;
+    }
+    window.__kmpDiffResult = null;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'kmp-diff-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;background:#1e1e2e;';
+
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:#181825;border-bottom:1px solid #313244;flex-shrink:0;';
+
+    var reviewLabel = document.createElement('span');
+    reviewLabel.textContent = 'Review AI Changes';
+    reviewLabel.style.cssText = 'color:#cba6f7;font:600 13px/1.4 "Segoe UI",sans-serif;';
+
+    var sep = document.createElement('span');
+    sep.textContent = '—';
+    sep.style.cssText = 'color:#6c7086;font:13px/1.4 sans-serif;';
+
+    var fileLabel = document.createElement('span');
+    fileLabel.textContent = fileName;
+    fileLabel.style.cssText = 'color:#89b4fa;font:13px/1.4 "JetBrains Mono",monospace;flex:1;';
+
+    var hint = document.createElement('span');
+    hint.textContent = (total > 1 ? current + ' of ' + total + ' files  ·  ' : '') + 'Original → Proposed';
+    hint.style.cssText = 'color:#6c7086;font:11px/1.4 sans-serif;margin-right:12px;';
+
+    function mkBtn(text, bg) {
+      var b = document.createElement('button');
+      b.textContent = text;
+      b.style.cssText = 'padding:5px 16px;background:' + bg + ';color:#1e1e2e;border:none;border-radius:5px;cursor:pointer;font:600 12px/1.4 "Segoe UI",sans-serif;';
+      b.onmouseenter = function () { this.style.opacity = '0.82'; };
+      b.onmouseleave = function () { this.style.opacity = '1'; };
+      return b;
+    }
+
+    var rejectBtn = mkBtn('Reject', '#f38ba8');
+    var acceptBtn = mkBtn('Accept', '#a6e3a1');
+
+    function decide(result) {
+      acceptBtn.disabled = true; rejectBtn.disabled = true;
+      acceptBtn.style.opacity = '0.5'; rejectBtn.style.opacity = '0.5';
+      window.__kmpDiffResult = result;
+      window.kmpHideDiffPreview();
+    }
+
+    rejectBtn.onclick = function () { decide('reject'); };
+    acceptBtn.onclick = function () { decide('accept'); };
+
+    header.appendChild(reviewLabel);
+    header.appendChild(sep);
+    header.appendChild(fileLabel);
+    header.appendChild(hint);
+    header.appendChild(rejectBtn);
+    header.appendChild(acceptBtn);
+    overlay.appendChild(header);
+
+    var editorHost = document.createElement('div');
+    editorHost.style.cssText = 'flex:1;overflow:hidden;';
+    overlay.appendChild(editorHost);
+
+    document.body.appendChild(overlay);
+
+    onMonacoReady(function () {
+      var ext = fileName.lastIndexOf('.') >= 0 ? fileName.substring(fileName.lastIndexOf('.')) : '';
+      var lang = (ext === '.kt' || ext === '.kts') ? 'kotlin'
+               : ext === '.xml'  ? 'xml'
+               : ext === '.json' ? 'json'
+               : ext === '.toml' ? 'ini'
+               : ext === '.md'   ? 'markdown'
+               : 'plaintext';
+
+      var diffEditor = monaco.editor.createDiffEditor(editorHost, {
+        theme:               'vs-dark',
+        fontSize:            14,
+        fontFamily:          "'JetBrains Mono', 'Fira Code', monospace",
+        automaticLayout:     true,
+        renderSideBySide:    true,
+        readOnly:            true,
+        minimap:             { enabled: false },
+        scrollBeyondLastLine: false
+      });
+      diffEditor.setModel({
+        original: monaco.editor.createModel(original, lang),
+        modified: monaco.editor.createModel(modified, lang)
+      });
+      window.__kmpDiffEditor = diffEditor;
+    });
+  };
+
+  window.kmpHideDiffPreview = function () {
+    var overlay = document.getElementById('kmp-diff-overlay');
+    if (overlay) overlay.remove();
+    if (window.__kmpDiffEditor) {
+      var models = window.__kmpDiffEditor.getModel();
+      if (models) { models.original.dispose(); models.modified.dispose(); }
+      window.__kmpDiffEditor.dispose();
+      window.__kmpDiffEditor = null;
+    }
+  };
+
+  window.kmpPopDiffResult = function () {
+    var r = window.__kmpDiffResult;
+    if (r !== null) window.__kmpDiffResult = null;
+    return r;
+  };
+
+  window.kmpSetEditorVisible = function (id, visible) {
+    var div = document.getElementById(id);
+    if (div) div.style.visibility = visible ? 'visible' : 'hidden';
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // WebSocket helpers — polling-safe (Kotlin reads via kmpWsPopMessage)
+  // ─────────────────────────────────────────────────────────────────────────
+  window.__kmpWs = { state: 'disconnected', messages: [], socket: null };
+
+  window.kmpWsConnect = function (url) {
+    if (window.__kmpWs.socket) {
+      window.__kmpWs.socket.close();
+      window.__kmpWs.socket = null;
+    }
+    window.__kmpWs.state    = 'connecting';
+    window.__kmpWs.messages = [];
+
+    var ws = new WebSocket(url);
+    window.__kmpWs.socket = ws;
+    ws.onopen    = function ()  { window.__kmpWs.state = 'connected'; };
+    ws.onclose   = function ()  { window.__kmpWs.state = 'disconnected'; window.__kmpWs.socket = null; };
+    ws.onerror   = function ()  { window.__kmpWs.state = 'error'; };
+    ws.onmessage = function (e) {
+      var q = window.__kmpWs.messages;
+      q.push(e.data);
+      if (q.length > 2000) { q.splice(0, q.length - 2000); }
+    };
+  };
+
+  window.kmpWsSend = function (data) {
+    var ws = window.__kmpWs.socket;
+    var ready = ws ? ws.readyState : -1;
+    var safe = data.replace(/"apiKey"\s*:\s*"[^"]*"/, '"apiKey":"[REDACTED]"');
+    console.log('%c[WS SEND readyState=' + ready + ']', 'color:#a6e3a1', safe.substring(0, 150));
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(data);
+    else console.warn('[WS SEND DROPPED — not open]', safe.substring(0, 80));
+  };
+
+  window.kmpWsClose = function () {
+    var ws = window.__kmpWs.socket;
+    if (ws) { ws.close(); window.__kmpWs.socket = null; }
+  };
+
+  window.kmpWsGetState   = function () { return window.__kmpWs.state; };
+  window.kmpWsPopMessage = function () {
+    var msg = window.__kmpWs.messages.shift() || null;
+    if (msg) console.log('%c[WS RECV]', 'color:#f9e2af', msg.substring(0, 150));
+    return msg;
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Emulator video — WebCodecs H.264 decoder → Canvas 2D
+  // ─────────────────────────────────────────────────────────────────────────
+  window.__kmpVideoWs = null;
+
+  window.kmpVideoInit = function (canvasId) {
+    if (!window.VideoDecoder) {
+      console.warn('WebCodecs not available in this browser');
+      return;
+    }
+    var canvas = document.getElementById(canvasId);
+    var ctx    = canvas ? canvas.getContext('2d') : null;
+
+    // Shared state: reset to true after configure() or any error so we
+    // always wait for a keyframe before passing chunks to the decoder.
+    var state   = { waitingForKeyframe: true };
+    var codecCfg = { codec: 'avc1.42001E', hardwareAcceleration: 'prefer-hardware' };
+
+    var decoder = new VideoDecoder({
+      output: function (frame) {
+        if (ctx) {
+          canvas.width  = frame.displayWidth;
+          canvas.height = frame.displayHeight;
+          ctx.drawImage(frame, 0, 0);
+        }
+        frame.close();
+      },
+      error: function (e) {
+        console.error('[Video] decoder error — waiting for next keyframe:', e);
+        state.waitingForKeyframe = true;
+        try { decoder.configure(codecCfg); } catch (_) {}
+      }
+    });
+    decoder.configure(codecCfg);
+    window['__video_decoder_' + canvasId] = decoder;
+    window['__video_state_'   + canvasId] = state;
+  };
+
+  window.kmpVideoConnect = function (url, canvasId) {
+    if (window.__kmpVideoWs) { window.__kmpVideoWs.close(); }
+    var ws = new WebSocket(url);
+    ws.binaryType = 'arraybuffer';
+    window.__kmpVideoWs = ws;
+
+    ws.onopen = function () {
+      // New connection → must receive a keyframe before decoding anything.
+      var state = window['__video_state_' + canvasId];
+      if (state) state.waitingForKeyframe = true;
+    };
+
+    ws.onmessage = function (e) {
+      if (!(e.data instanceof ArrayBuffer)) return;
+      var view    = new Uint8Array(e.data);
+      var isKey   = view[0] === 1;
+      var decoder = window['__video_decoder_' + canvasId];
+      var state   = window['__video_state_'   + canvasId];
+      if (!decoder || !state || decoder.state === 'closed') return;
+
+      // Drop delta frames until the first keyframe arrives after configure/reconnect.
+      if (state.waitingForKeyframe) {
+        if (!isKey) return;
+        state.waitingForKeyframe = false;
+      }
+
+      try {
+        decoder.decode(new EncodedVideoChunk({
+          type:      isKey ? 'key' : 'delta',
+          timestamp: performance.now() * 1000,
+          data:      e.data.slice(1)
+        }));
+      } catch (err) {
+        console.warn('[Video] decode failed, resetting to keyframe wait:', err.message);
+        state.waitingForKeyframe = true;
+      }
+    };
+
+    ws.onerror = function (e) { console.error('[Video] WS error', e); };
+    ws.onclose = function ()  { console.log('[Video] WS closed'); };
+  };
+
+  window.kmpVideoDisconnect = function () {
+    if (window.__kmpVideoWs) { window.__kmpVideoWs.close(); window.__kmpVideoWs = null; }
+  };
+
+  // ── Agent health check (fetch + polling) ──────────────────────────────────
+  window.__kmpAgentHealth = false;
+
+  window.kmpCheckAgentHealth = function (url) {
+    fetch(url, { signal: AbortSignal.timeout(2000) })
+      .then(function (r) { window.__kmpAgentHealth = r.ok; })
+      .catch(function ()  { window.__kmpAgentHealth = false; });
+  };
+
+  window.kmpGetAgentHealth = function () { return window.__kmpAgentHealth; };
+
+  // ── File-system REST bridge (folder browser) ──────────────────────────────
+  window.__kmpFs = { reqId: 0, pending: false, result: null, home: null };
+
+  window.kmpFsListDir = function (baseUrl, path) {
+    var myId = ++window.__kmpFs.reqId;
+    window.__kmpFs.pending = true;
+    window.__kmpFs.result  = null;
+    fetch(baseUrl + '/fs/list?path=' + encodeURIComponent(path), { signal: AbortSignal.timeout(4000) })
+      .then(function (r) { return r.text(); })
+      .then(function (t) { if (window.__kmpFs.reqId === myId) { window.__kmpFs.pending = false; window.__kmpFs.result = t; } })
+      .catch(function () { if (window.__kmpFs.reqId === myId) { window.__kmpFs.pending = false; window.__kmpFs.result = '[]'; } });
+  };
+
+  window.kmpFsGetListResult = function () {
+    if (window.__kmpFs.pending) return null;
+    var r = window.__kmpFs.result;
+    window.__kmpFs.result = null;
+    return r;
+  };
+
+  window.kmpFsFetchHome = function (baseUrl) {
+    window.__kmpFs.home = null;
+    fetch(baseUrl + '/fs/home', { signal: AbortSignal.timeout(4000) })
+      .then(function (r) { return r.text(); })
+      .then(function (t) { window.__kmpFs.home = t.trim(); })
+      .catch(function () { window.__kmpFs.home = '/'; });
+  };
+
+  window.kmpFsPopHome = function () {
+    var h = window.__kmpFs.home;
+    if (h !== null) window.__kmpFs.home = null;
+    return h;
+  };
+
+  // ── AI key test ──────────────────────────────────────────────────────────
+  window.__kmpAiTest = { pending: false, result: null };
+
+  window.kmpTestAiKey = function (agentBaseUrl, provider, key, customBaseUrl) {
+    window.__kmpAiTest.pending = true;
+    window.__kmpAiTest.result  = null;
+    var url = agentBaseUrl + '/ai/test?provider=' + encodeURIComponent(provider)
+            + '&key=' + encodeURIComponent(key);
+    if (customBaseUrl) url += '&customBaseUrl=' + encodeURIComponent(customBaseUrl);
+    fetch(url, { signal: AbortSignal.timeout(15000) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        window.__kmpAiTest.pending = false;
+        window.__kmpAiTest.result  = d.ok ? 'ok' : ('error:' + (d.error || 'Unknown error'));
+      })
+      .catch(function (e) {
+        window.__kmpAiTest.pending = false;
+        window.__kmpAiTest.result  = 'error:' + (e.message || 'Connection failed');
+      });
+  };
+
+  window.kmpGetAiTestResult = function () {
+    if (window.__kmpAiTest.pending) return null;
+    var r = window.__kmpAiTest.result;
+    if (r !== null) window.__kmpAiTest.result = null;
+    return r;
+  };
+
+  // ── Clipboard ─────────────────────────────────────────────────────────────
+  window.kmpCopyToClipboard = function (text) {
+    navigator.clipboard.writeText(text).catch(function () {
+      // Fallback for non-secure contexts
+      var el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    });
+  };
+</script>
+
+<!-- kmpstudio.js MUST load first — Monaco's AMD loader defines window.define and
+     would hijack webpack's UMD init if it ran before the Compose Wasm bundle. -->
+<script src="skiko.js"></script>
+<script src="kmpstudio.js"></script>
+
+<!-- Monaco loads after Compose so its AMD system doesn't interfere.
+     The kmpMonacoInit helper queues calls until __monacoReady is true. -->
+<script>
+  // Rename the config key so Monaco's loader reads it before webpack touches require
+  window.monacoRequire = { paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"
+        onload="
+          var r = window.monacoRequire;
+          require.config(r);
+          require(['vs/editor/editor.main'], function() {
+            window.__monacoReady = true;
+            window.__monacoReadyCallbacks.forEach(function(fn){ fn(); });
+            window.__monacoReadyCallbacks = [];
+            kmpRegisterInlineCompletions();
+          });
+        ">
+</script>
+
+<script>
+  window.kmpRegisterInlineCompletions = function() {
+    var _timer = null;
+    var _abort = null;
+
+    monaco.languages.registerInlineCompletionsProvider({ pattern: '**' }, {
+      provideInlineCompletions: function(model, position, context, token) {
+        clearTimeout(_timer);
+        if (_abort) { _abort.abort(); _abort = null; }
+
+        return new Promise(function(resolve) {
+          _timer = setTimeout(function() {
+            if (token.isCancellationRequested) { resolve({ items: [] }); return; }
+
+            var offset   = model.getOffsetAt(position);
+            var full     = model.getValue();
+            var prefix   = full.substring(Math.max(0, offset - 1500), offset);
+            var suffix   = full.substring(offset, Math.min(full.length, offset + 500));
+            var language = model.getLanguageId();
+
+            var provider   = localStorage.getItem('kmp_ai_provider') || 'CLAUDE';
+            var port       = parseInt(localStorage.getItem('kmp_agent_port') || '8765');
+            var key        = '';
+            if      (provider === 'CLAUDE')  key = localStorage.getItem('kmp_claude_key')  || '';
+            else if (provider === 'OPENAI')  key = localStorage.getItem('kmp_openai_key')  || '';
+            else if (provider === 'GEMINI')  key = localStorage.getItem('kmp_gemini_key')  || '';
+            else if (provider === 'CUSTOM')  key = localStorage.getItem('kmp_custom_key')  || '';
+            var customUrl = localStorage.getItem('kmp_custom_url') || '';
+
+            _abort = new AbortController();
+            token.onCancellationRequested(function() { if (_abort) _abort.abort(); });
+
+            var url = 'http://127.0.0.1:' + port + '/ai/complete'
+                    + '?provider=' + encodeURIComponent(provider)
+                    + '&key='      + encodeURIComponent(key);
+            if (customUrl) url += '&customBaseUrl=' + encodeURIComponent(customUrl);
+
+            fetch(url, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ prefix: prefix, suffix: suffix, language: language }),
+              signal:  _abort.signal
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              var text = (d.completion || '').trimEnd();
+              if (!text || token.isCancellationRequested) { resolve({ items: [] }); return; }
+              resolve({
+                items: [{
+                  insertText: text,
+                  range: {
+                    startLineNumber: position.lineNumber, startColumn: position.column,
+                    endLineNumber:   position.lineNumber, endColumn:   position.column
+                  }
+                }],
+                enableForwardStability: true
+              });
+            })
+            .catch(function() { resolve({ items: [] }); });
+          }, 400);
+        });
+      },
+      freeInlineCompletions: function() {}
+    });
+  };
+</script>
+</body>
+</html>
