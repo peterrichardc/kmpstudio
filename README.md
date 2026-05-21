@@ -16,7 +16,7 @@
 ---
 
 <p align="center">
-  <video src="docs/demo.mp4" width="860" controls autoplay muted loop></video>
+  <video src="https://raw.githubusercontent.com/peterrichardc/kmpstudio/main/docs/demo.mp4" width="860" controls autoplay muted loop></video>
 </p>
 
 <p align="center"><em>Project wizard → AI diff → Gradle build → Live emulator stream</em></p>
