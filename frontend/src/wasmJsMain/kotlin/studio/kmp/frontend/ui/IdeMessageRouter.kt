@@ -4,7 +4,6 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import studio.kmp.frontend.interop.*
-import studio.kmp.frontend.interop.getTimeString
 import studio.kmp.frontend.ws.WsState
 import studio.kmp.shared.model.*
 import studio.kmp.shared.parser.LineType
@@ -218,6 +217,8 @@ fun IdeMessageRouter(state: IdeState) {
                         val result = popDiffResult()
                         if (result != null) {
                             if (result == "accept") {
+                                state.diffHistory.add(0, diffHistoryEntry(item.filePath, item.originalContent))
+                                if (state.diffHistory.size > 30) state.diffHistory.removeAt(state.diffHistory.lastIndex)
                                 when {
                                     item.filePath == state.editorState.activeFile -> {
                                         monacoSetValue(state.editorId, item.proposedContent)

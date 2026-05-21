@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
+import studio.kmp.frontend.interop.monacoSetValue
 import studio.kmp.frontend.theme.*
 import studio.kmp.frontend.ws.WsState
 import studio.kmp.shared.model.*
@@ -45,7 +46,16 @@ fun IdeRightPanel(
                 )
                 RightTab.HISTORY -> DiffHistoryPanel(
                     entries  = state.diffHistory,
-                    state    = state,
+                    onRevert = { entry ->
+                        if (entry.filePath == state.editorState.activeFile) {
+                            monacoSetValue(state.editorId, entry.originalContent)
+                            state.editorState.updateContent(entry.filePath, entry.originalContent)
+                        } else {
+                            state.editorState.openFiles[entry.filePath] = entry.originalContent
+                        }
+                        state.wsClient.send(WsMessage.WriteFile(entry.filePath, entry.originalContent))
+                        state.diffHistory.remove(entry)
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
                 RightTab.EMULATOR -> EmulatorPanel(

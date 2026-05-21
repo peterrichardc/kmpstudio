@@ -2,6 +2,8 @@ package studio.kmp.frontend.ui
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,20 +12,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import studio.kmp.frontend.interop.monacoSetValue
 import studio.kmp.frontend.theme.*
-import studio.kmp.shared.model.WsMessage
 
 @Composable
 fun DiffHistoryPanel(
-    entries:   List<DiffHistoryEntry>,
-    state:     IdeState,
-    modifier:  Modifier = Modifier
+    entries:  List<DiffHistoryEntry>,
+    onRevert: (DiffHistoryEntry) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val scroll = rememberScrollState()
-
     Column(modifier = modifier) {
-        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -60,15 +57,12 @@ fun DiffHistoryPanel(
                 }
             }
         } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scroll)
-                    .padding(8.dp),
+            LazyColumn(
+                modifier            = Modifier.fillMaxSize().padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                entries.forEach { entry ->
-                    DiffHistoryItem(entry = entry, state = state)
+                items(entries, key = { it.id }) { entry ->
+                    DiffHistoryItem(entry = entry, onRevert = onRevert)
                 }
             }
         }
@@ -76,14 +70,17 @@ fun DiffHistoryPanel(
 }
 
 @Composable
-private fun DiffHistoryItem(entry: DiffHistoryEntry, state: IdeState) {
+private fun DiffHistoryItem(
+    entry:    DiffHistoryEntry,
+    onRevert: (DiffHistoryEntry) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(KmpSurface0)
             .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -96,40 +93,18 @@ private fun DiffHistoryItem(entry: DiffHistoryEntry, state: IdeState) {
                 overflow   = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(2.dp))
-            Text(
-                entry.timestamp,
-                color    = KmpOverlay0,
-                fontSize = 11.sp
-            )
+            Text(entry.timestamp, color = KmpOverlay0, fontSize = 11.sp)
         }
 
-        // Revert button
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
                 .background(KmpSurface1)
-                .clickable { revert(entry, state) }
+                .clickable { onRevert(entry) }
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                "Revert",
-                color      = KmpRed,
-                fontSize   = 11.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text("Revert", color = KmpRed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
-}
-
-private fun revert(entry: DiffHistoryEntry, state: IdeState) {
-    // Restore original content in editor and on disk
-    if (entry.filePath == state.editorState.activeFile) {
-        monacoSetValue(state.editorId, entry.originalContent)
-        state.editorState.updateContent(entry.filePath, entry.originalContent)
-    } else {
-        state.editorState.openFiles[entry.filePath] = entry.originalContent
-    }
-    state.wsClient.send(WsMessage.WriteFile(entry.filePath, entry.originalContent))
-    state.diffHistory.remove(entry)
 }
