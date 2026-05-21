@@ -71,13 +71,16 @@ fun NewProjectWizard(
                 }
                 is WsMessage.AiScaffoldConfig -> {
                     val coreLibs = setOf("coroutines", "serialization", "datetime", "settings")
+                    val resolvedLibs = (coreLibs + msg.libraries.toSet()).let { libs ->
+                        if (msg.architecture == "library") libs - uiOnlyLibs else libs
+                    }
                     s = s.copy(
                         aiThinking   = false,
                         projectName  = msg.projectName.ifBlank { s.projectName },
                         packageName  = msg.packageName,
                         targets      = msg.targets.toSet(),
                         architecture = msg.architecture,
-                        libraries    = coreLibs + msg.libraries.toSet(),
+                        libraries    = resolvedLibs,
                         aiReasoning  = msg.reasoning,
                         step         = 5
                     )
