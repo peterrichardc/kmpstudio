@@ -43,6 +43,11 @@ fun IdeRightPanel(
                     onClear  = { state.logcatLogs.clear() },
                     modifier = Modifier.fillMaxSize()
                 )
+                RightTab.HISTORY -> DiffHistoryPanel(
+                    entries  = state.diffHistory,
+                    state    = state,
+                    modifier = Modifier.fillMaxSize()
+                )
                 RightTab.EMULATOR -> EmulatorPanel(
                     wsState           = wsState,
                     agentPort         = state.agentPort,
@@ -89,6 +94,7 @@ private fun RightTabBar(state: IdeState, onClose: () -> Unit) {
                 RightTab.LOGS     -> "Build"
                 RightTab.LOGCAT   -> if (state.logcatCmdId != null) "Logcat (live)" else "Logcat"
                 RightTab.EMULATOR -> "Emulator"
+                RightTab.HISTORY  -> if (state.diffHistory.isNotEmpty()) "History (${state.diffHistory.size})" else "History"
             }
             RightTabItem(label, state.rightTab == tab) { state.rightTab = tab }
         }

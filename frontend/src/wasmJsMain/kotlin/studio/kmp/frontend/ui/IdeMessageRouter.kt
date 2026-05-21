@@ -4,9 +4,11 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import studio.kmp.frontend.interop.*
+import studio.kmp.frontend.interop.getTimeString
 import studio.kmp.frontend.ws.WsState
 import studio.kmp.shared.model.*
 import studio.kmp.shared.parser.LineType
+import kotlin.random.Random
 
 @Composable
 fun IdeMessageRouter(state: IdeState) {
@@ -40,13 +42,18 @@ fun IdeMessageRouter(state: IdeState) {
                     if (msg.autoApplied) {
                         when {
                             resolved == state.editorState.activeFile -> {
-                                val updated = applyHunksToContent(monacoGetValue(state.editorId), msg.hunks)
+                                val original = monacoGetValue(state.editorId)
+                                val updated  = applyHunksToContent(original, msg.hunks)
+                                state.diffHistory.add(0, diffHistoryEntry(resolved, original))
+                                if (state.diffHistory.size > 30) state.diffHistory.removeAt(state.diffHistory.lastIndex)
                                 monacoSetValue(state.editorId, updated)
                                 state.editorState.updateContent(resolved, updated)
                             }
                             resolved in state.editorState.openFiles -> {
                                 val current = state.editorState.openFiles[resolved] ?: return@collect
                                 val updated = applyHunksToContent(current, msg.hunks)
+                                state.diffHistory.add(0, diffHistoryEntry(resolved, current))
+                                if (state.diffHistory.size > 30) state.diffHistory.removeAt(state.diffHistory.lastIndex)
                                 state.editorState.openFiles[resolved] = updated
                             }
                         }
@@ -240,3 +247,11 @@ fun IdeMessageRouter(state: IdeState) {
         }
     }
 }
+
+private fun diffHistoryEntry(filePath: String, originalContent: String) = DiffHistoryEntry(
+    id              = Random.nextLong().toULong().toString(16).take(8),
+    filePath        = filePath,
+    fileName        = filePath.substringAfterLast('/'),
+    timestamp       = getTimeString(),
+    originalContent = originalContent
+)

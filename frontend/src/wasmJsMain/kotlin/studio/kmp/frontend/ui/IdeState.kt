@@ -13,12 +13,20 @@ import studio.kmp.shared.parser.BuildError
 import studio.kmp.shared.parser.CliOutputParser
 import kotlin.random.Random
 
-enum class RightTab { LOGS, LOGCAT, EMULATOR }
+enum class RightTab { LOGS, LOGCAT, EMULATOR, HISTORY }
 
 data class DiffReviewState(
     val filePath: String,
     val originalContent: String,
     val proposedContent: String
+)
+
+data class DiffHistoryEntry(
+    val id: String,
+    val filePath: String,
+    val fileName: String,
+    val timestamp: String,
+    val originalContent: String
 )
 
 fun resolveDiffPath(relativePath: String, projectRoot: String): String =
@@ -86,6 +94,7 @@ class IdeState(
     val pendingDiffs    = mutableStateMapOf<String, List<DiffHunk>>()
     val diffLoadPending = mutableSetOf<String>()
     val diffReviewQueue = mutableStateListOf<DiffReviewState>()
+    val diffHistory     = mutableStateListOf<DiffHistoryEntry>()
 
     fun markersJson(errors: List<BuildError>): String = buildString {
         append('[')

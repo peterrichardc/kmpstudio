@@ -72,6 +72,10 @@ external fun fsFetchHome(baseUrl: String)
 @JsName("kmpFsPopHome")
 external fun fsPopHome(): String?
 
+// ── Time ──────────────────────────────────────────────────────────────────────
+@JsName("kmpGetTimeString")
+external fun getTimeString(): String
+
 // ── Debug ─────────────────────────────────────────────────────────────────────
 @JsName("kmpLog")
 external fun consoleLog(msg: String)
