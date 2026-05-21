@@ -16,7 +16,7 @@
 ---
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/ffc44e20-3899-4144-9629-6eb0d5aaf567" width="860" controls autoplay muted loop></video>
+  <video src="docs/demo.mp4" width="860" controls autoplay muted loop></video>
 </p>
 
 <p align="center"><em>Project wizard → AI diff → Gradle build → Live emulator stream</em></p>
