@@ -231,7 +231,6 @@ kmpstudio/
 
 - iOS simulator streaming
 - One-click web deploy to GitHub Pages / Netlify
-- Diff history — browse and revert AI-applied changes
 - GitHub integration
 - Template marketplace — share and install community packs
 - Collaborative sessions
