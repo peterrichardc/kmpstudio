@@ -8,6 +8,11 @@ class ProjectScaffolder {
 
     // (templateResource, outputRelativePath) — paths support {{packagePath}} substitution
     private fun manifestFor(ctx: TemplateContext): List<Pair<String, String>> = buildList {
+        if (ctx.isLibrary) {
+            manifestForLibrary(ctx)
+            return@buildList
+        }
+
         // ── Common ────────────────────────────────────────────────────────────
         add("common/settings.gradle.kts" to "settings.gradle.kts")
         add("common/root.build.gradle.kts" to "build.gradle.kts")
@@ -62,6 +67,25 @@ class ProjectScaffolder {
                 add("$arch/AppState.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/model/AppState.kt")
                 add("$arch/HomeViewModel.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/viewmodel/HomeViewModel.kt")
             }
+        }
+    }
+
+    private fun MutableList<Pair<String, String>>.manifestForLibrary(ctx: TemplateContext) {
+        add("library/settings.gradle.kts" to "settings.gradle.kts")
+        add("library/root.build.gradle.kts" to "build.gradle.kts")
+        add("common/gradle.properties" to "gradle.properties")
+        add("library/shared.build.gradle.kts" to "shared/build.gradle.kts")
+        add("common/shared.Platform.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/Platform.kt")
+        add("library/SdkClient.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/SdkClient.kt")
+
+        if (ctx.android) {
+            add("common/android.Platform.kt" to "shared/src/androidMain/kotlin/{{packagePath}}/Platform.android.kt")
+        }
+        if (ctx.ios) {
+            add("common/ios.Platform.kt" to "shared/src/iosMain/kotlin/{{packagePath}}/Platform.ios.kt")
+        }
+        if (ctx.desktop) {
+            add("common/desktop.Platform.kt" to "shared/src/desktopMain/kotlin/{{packagePath}}/Platform.desktop.kt")
         }
     }
 

@@ -1,0 +1,68 @@
+plugins {
+    kotlin("multiplatform")
+    kotlin("plugin.serialization")
+    id("maven-publish")
+{{#android}}    id("com.android.library")
+{{/android}}{{#sqldelight}}    id("app.cash.sqldelight")
+{{/sqldelight}}}
+
+kotlin {
+{{#android}}    androidTarget {
+        publishLibraryVariants("release")
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+{{/android}}{{#ios}}    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
+        it.binaries.framework {
+            baseName = "shared"
+            isStatic = true
+        }
+    }
+{{/ios}}{{#desktop}}    jvm()
+{{/desktop}}{{#web}}    wasmJs { browser() }
+{{/web}}
+    sourceSets {
+        commonMain.dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+            implementation("com.russhwolf:multiplatform-settings:1.1.1")
+{{#ktor}}            implementation("io.ktor:ktor-client-core:{{ktorVersion}}")
+            implementation("io.ktor:ktor-client-content-negotiation:{{ktorVersion}}")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:{{ktorVersion}}")
+{{/ktor}}{{#koin}}            implementation("io.insert-koin:koin-core:{{koinVersion}}")
+{{/koin}}        }
+{{#android}}        androidMain.dependencies {
+{{#ktor}}            implementation("io.ktor:ktor-client-okhttp:{{ktorVersion}}")
+{{/ktor}}        }
+{{/android}}{{#ios}}        iosMain.dependencies {
+{{#ktor}}            implementation("io.ktor:ktor-client-darwin:{{ktorVersion}}")
+{{/ktor}}        }
+{{/ios}}    }
+}
+
+{{#android}}android {
+    namespace = "{{packageName}}"
+    compileSdk = 35
+    defaultConfig { minSdk = 24 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+{{/android}}{{#sqldelight}}sqldelight {
+    databases {
+        create("AppDatabase") {
+            packageName.set("{{packageName}}.db")
+        }
+    }
+}
+{{/sqldelight}}
+publishing {
+    publications.withType<MavenPublication> {
+        groupId = "{{packageName}}"
+        artifactId = "{{projectName}}"
+        version = "0.1.0"
+    }
+}

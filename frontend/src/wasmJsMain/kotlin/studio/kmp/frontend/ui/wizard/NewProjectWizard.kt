@@ -349,19 +349,30 @@ private fun Step2Targets(s: WizardState, onChange: (WizardState) -> Unit) {
 @Composable
 private fun Step3Architecture(s: WizardState, onChange: (WizardState) -> Unit) {
     val options = listOf(
-        Triple("clean", "Clean Architecture", "Domain / Data / Presentation layers with Use Cases"),
-        Triple("mvi",   "MVI",                "State + Intent + Effect sealed classes with a Store"),
-        Triple("mvvm",  "MVVM",               "ViewModel with StateFlow, minimal boilerplate")
+        Triple("library", "Library / SDK",    "No UI — publishable KMP module (AAR + XCFramework)"),
+        Triple("clean",   "Clean Architecture", "Domain / Data / Presentation layers with Use Cases"),
+        Triple("mvi",     "MVI",                "State + Intent + Effect sealed classes with a Store"),
+        Triple("mvvm",    "MVVM",               "ViewModel with StateFlow, minimal boilerplate")
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         options.forEach { (id, title, desc) ->
-            ArchRow(id, title, desc, s.architecture == id) { onChange(s.copy(architecture = id)) }
+            ArchRow(id, title, desc, s.architecture == id) {
+                val updated = s.copy(architecture = id)
+                // remove UI-only libs when switching to library mode
+                val sanitized = if (id == "library") updated.copy(
+                    libraries = updated.libraries - setOf("coil", "voyager", "molecule")
+                ) else updated
+                onChange(sanitized)
+            }
         }
     }
 }
 
+private val uiOnlyLibs = setOf("coil", "voyager", "molecule")
+
 @Composable
 private fun Step4Libraries(s: WizardState, onChange: (WizardState) -> Unit) {
+    val isLibrary = s.architecture == "library"
     val groups = listOf(
         "Core (always included)" to listOf(
             "coroutines"    to "Kotlin Coroutines",
@@ -390,7 +401,9 @@ private fun Step4Libraries(s: WizardState, onChange: (WizardState) -> Unit) {
             Text(groupName, color = KmpPurple, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             libs.forEach { (id, label) ->
                 val core = groupName.startsWith("Core")
-                CheckRow(label, core || id in s.libraries, enabled = !core) { checked ->
+                val uiOnly = isLibrary && id in uiOnlyLibs
+                val displayLabel = if (uiOnly) "$label (N/A for libraries)" else label
+                CheckRow(displayLabel, core || id in s.libraries, enabled = !core && !uiOnly) { checked ->
                     onChange(s.copy(libraries = if (checked) s.libraries + id else s.libraries - id))
                 }
             }
@@ -405,7 +418,7 @@ private fun Step5Summary(s: WizardState) {
         "Directory"    to "${s.parentDir}/${s.projectName}",
         "Package"      to s.packageName.ifBlank { derivePackage(s.projectName) },
         "Targets"      to s.targets.joinToString(", "),
-        "Architecture" to s.architecture.replaceFirstChar { it.uppercase() },
+        "Type"         to if (s.architecture == "library") "Library / SDK" else s.architecture.replaceFirstChar { it.uppercase() },
         "Libraries"    to s.libraries.joinToString(", ").ifBlank { "—" }
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

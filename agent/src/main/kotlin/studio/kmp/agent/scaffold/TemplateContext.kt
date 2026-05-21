@@ -7,6 +7,7 @@ data class TemplateContext(
     val packageName: String,
     val packagePath: String,          // com.example.app → com/example/app
     val architecture: String,
+    val isLibrary: Boolean,
     val android: Boolean,
     val ios: Boolean,
     val desktop: Boolean,
@@ -32,6 +33,7 @@ data class TemplateContext(
         "projectName"      to projectName,
         "packageName"      to packageName,
         "packagePath"      to packagePath,
+        "isLibrary"        to isLibrary,
         "android"          to android,
         "ios"              to ios,
         "desktop"          to desktop,
@@ -60,6 +62,7 @@ data class TemplateContext(
             packageName  = req.packageName,
             packagePath  = req.packageName.replace('.', '/'),
             architecture = req.architecture,
+            isLibrary    = req.architecture == "library",
             android      = "android" in req.targets,
             ios          = "ios" in req.targets,
             desktop      = "desktop" in req.targets,
