@@ -7,70 +7,71 @@ import java.io.InputStreamReader
 class ProjectScaffolder {
 
     // (templateResource, outputRelativePath) — paths support {{packagePath}} substitution
-    private fun manifestFor(ctx: TemplateContext): List<Pair<String, String>> = buildList {
-        if (ctx.isLibrary) {
-            manifestForLibrary(ctx)
-            return@buildList
-        }
+    private fun manifestFor(ctx: TemplateContext): List<Pair<String, String>> {
+        if (ctx.isLibrary) return manifestForLibrary(ctx)
+        return buildList {
+            // ── Common ────────────────────────────────────────────────────────────
+            add("common/settings.gradle.kts" to "settings.gradle.kts")
+            add("common/root.build.gradle.kts" to "build.gradle.kts")
+            add("common/gradle.properties" to "gradle.properties")
+            add("common/shared.build.gradle.kts" to "shared/build.gradle.kts")
+            add("common/shared.Platform.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/Platform.kt")
 
-        // ── Common ────────────────────────────────────────────────────────────
-        add("common/settings.gradle.kts" to "settings.gradle.kts")
-        add("common/root.build.gradle.kts" to "build.gradle.kts")
-        add("common/gradle.properties" to "gradle.properties")
-        add("common/shared.build.gradle.kts" to "shared/build.gradle.kts")
-        add("common/shared.Platform.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/Platform.kt")
-
-        // ── Targets ───────────────────────────────────────────────────────────
-        if (ctx.android) {
-            add("common/android.build.gradle.kts" to "androidApp/build.gradle.kts")
-            add("common/android.manifest" to "androidApp/src/main/AndroidManifest.xml")
-            add("common/android.MainActivity.kt" to "androidApp/src/main/kotlin/{{packagePath}}/MainActivity.kt")
-            add("common/android.Platform.kt" to "shared/src/androidMain/kotlin/{{packagePath}}/Platform.android.kt")
-        }
-        if (ctx.ios) {
-            add("common/ios.Platform.kt" to "shared/src/iosMain/kotlin/{{packagePath}}/Platform.ios.kt")
-            add("common/ios.MainViewController.kt" to "shared/src/iosMain/kotlin/{{packagePath}}/MainViewController.kt")
-            add("common/ios.project.pbxproj" to "iosApp/iosApp.xcodeproj/project.pbxproj")
-            add("common/ios.workspace.contents" to "iosApp/iosApp.xcodeproj/project.xcworkspace/contents.xcworkspacedata")
-            add("common/ios.Config.xcconfig" to "iosApp/Configuration/Config.xcconfig")
-            add("common/ios.iOSApp.swift" to "iosApp/iosApp/iOSApp.swift")
-            add("common/ios.ContentView.swift" to "iosApp/iosApp/ContentView.swift")
-            add("common/ios.Info.plist" to "iosApp/iosApp/Info.plist")
-            add("common/ios.Assets.Contents.json" to "iosApp/iosApp/Assets.xcassets/Contents.json")
-            add("common/ios.AccentColor.Contents.json" to "iosApp/iosApp/Assets.xcassets/AccentColor.colorset/Contents.json")
-            add("common/ios.AppIcon.Contents.json" to "iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/Contents.json")
-            add("common/ios.PreviewAssets.Contents.json" to "iosApp/iosApp/Preview Content/Preview Assets.xcassets/Contents.json")
-        }
-        if (ctx.desktop) {
-            add("common/desktop.build.gradle.kts" to "desktopApp/build.gradle.kts")
-            add("common/desktop.Main.kt" to "desktopApp/src/main/kotlin/{{packagePath}}/Main.kt")
-            add("common/desktop.Platform.kt" to "shared/src/desktopMain/kotlin/{{packagePath}}/Platform.desktop.kt")
-        }
-
-        // ── Architecture-specific ─────────────────────────────────────────────
-        val arch = ctx.architecture
-        when (ctx.architecture) {
-            "clean" -> {
-                add("$arch/App.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/App.kt")
-                add("$arch/domain.Greeting.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/domain/model/Greeting.kt")
-                add("$arch/domain.GreetingRepository.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/domain/repository/GreetingRepository.kt")
-                add("$arch/domain.GetGreetingUseCase.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/domain/usecase/GetGreetingUseCase.kt")
-                add("$arch/data.GreetingRepositoryImpl.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/data/repository/GreetingRepositoryImpl.kt")
+            // ── Targets ───────────────────────────────────────────────────────────
+            if (ctx.android) {
+                add("common/android.build.gradle.kts" to "androidApp/build.gradle.kts")
+                add("common/android.manifest" to "androidApp/src/main/AndroidManifest.xml")
+                add("common/android.MainActivity.kt" to "androidApp/src/main/kotlin/{{packagePath}}/MainActivity.kt")
+                add("common/android.Platform.kt" to "shared/src/androidMain/kotlin/{{packagePath}}/Platform.android.kt")
             }
-            "mvi" -> {
-                add("$arch/App.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/App.kt")
-                add("$arch/HomeContract.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/feature/home/HomeContract.kt")
-                add("$arch/HomeStore.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/feature/home/HomeStore.kt")
+            if (ctx.ios) {
+                add("common/ios.Platform.kt" to "shared/src/iosMain/kotlin/{{packagePath}}/Platform.ios.kt")
+                add("common/ios.MainViewController.kt" to "shared/src/iosMain/kotlin/{{packagePath}}/MainViewController.kt")
+                add("common/ios.project.pbxproj" to "iosApp/iosApp.xcodeproj/project.pbxproj")
+                add("common/ios.workspace.contents" to "iosApp/iosApp.xcodeproj/project.xcworkspace/contents.xcworkspacedata")
+                add("common/ios.Config.xcconfig" to "iosApp/Configuration/Config.xcconfig")
+                add("common/ios.iOSApp.swift" to "iosApp/iosApp/iOSApp.swift")
+                add("common/ios.ContentView.swift" to "iosApp/iosApp/ContentView.swift")
+                add("common/ios.Info.plist" to "iosApp/iosApp/Info.plist")
+                add("common/ios.Assets.Contents.json" to "iosApp/iosApp/Assets.xcassets/Contents.json")
+                add("common/ios.AccentColor.Contents.json" to "iosApp/iosApp/Assets.xcassets/AccentColor.colorset/Contents.json")
+                add("common/ios.AppIcon.Contents.json" to "iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/Contents.json")
+                add("common/ios.PreviewAssets.Contents.json" to "iosApp/iosApp/Preview Content/Preview Assets.xcassets/Contents.json")
             }
-            "mvvm" -> {
-                add("$arch/App.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/App.kt")
-                add("$arch/AppState.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/model/AppState.kt")
-                add("$arch/HomeViewModel.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/viewmodel/HomeViewModel.kt")
+            if (ctx.desktop) {
+                add("common/desktop.build.gradle.kts" to "desktopApp/build.gradle.kts")
+                add("common/desktop.Main.kt" to "desktopApp/src/main/kotlin/{{packagePath}}/Main.kt")
+                add("common/desktop.Platform.kt" to "shared/src/desktopMain/kotlin/{{packagePath}}/Platform.desktop.kt")
+            }
+            if (ctx.web) {
+                add("common/web.Platform.kt" to "shared/src/wasmJsMain/kotlin/{{packagePath}}/Platform.wasmJs.kt")
+            }
+
+            // ── Architecture-specific ─────────────────────────────────────────────
+            val arch = ctx.architecture
+            when (ctx.architecture) {
+                "clean" -> {
+                    add("$arch/App.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/App.kt")
+                    add("$arch/domain.Greeting.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/domain/model/Greeting.kt")
+                    add("$arch/domain.GreetingRepository.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/domain/repository/GreetingRepository.kt")
+                    add("$arch/domain.GetGreetingUseCase.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/domain/usecase/GetGreetingUseCase.kt")
+                    add("$arch/data.GreetingRepositoryImpl.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/data/repository/GreetingRepositoryImpl.kt")
+                }
+                "mvi" -> {
+                    add("$arch/App.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/App.kt")
+                    add("$arch/HomeContract.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/feature/home/HomeContract.kt")
+                    add("$arch/HomeStore.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/feature/home/HomeStore.kt")
+                }
+                "mvvm" -> {
+                    add("$arch/App.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/App.kt")
+                    add("$arch/AppState.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/model/AppState.kt")
+                    add("$arch/HomeViewModel.kt" to "shared/src/commonMain/kotlin/{{packagePath}}/viewmodel/HomeViewModel.kt")
+                }
             }
         }
     }
 
-    private fun MutableList<Pair<String, String>>.manifestForLibrary(ctx: TemplateContext) {
+    private fun manifestForLibrary(ctx: TemplateContext): List<Pair<String, String>> = buildList {
         add("library/settings.gradle.kts" to "settings.gradle.kts")
         add("library/root.build.gradle.kts" to "build.gradle.kts")
         add("common/gradle.properties" to "gradle.properties")
@@ -86,6 +87,9 @@ class ProjectScaffolder {
         }
         if (ctx.desktop) {
             add("common/desktop.Platform.kt" to "shared/src/desktopMain/kotlin/{{packagePath}}/Platform.desktop.kt")
+        }
+        if (ctx.web) {
+            add("common/web.Platform.kt" to "shared/src/wasmJsMain/kotlin/{{packagePath}}/Platform.wasmJs.kt")
         }
     }
 

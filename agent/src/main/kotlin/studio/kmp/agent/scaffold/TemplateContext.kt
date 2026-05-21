@@ -7,7 +7,6 @@ data class TemplateContext(
     val packageName: String,
     val packagePath: String,          // com.example.app → com/example/app
     val architecture: String,
-    val isLibrary: Boolean,
     val android: Boolean,
     val ios: Boolean,
     val desktop: Boolean,
@@ -29,31 +28,37 @@ data class TemplateContext(
     val coilVersion: String = "3.0.0",
     val voyagerVersion: String = "1.0.0",
 ) {
+    val isLibrary: Boolean get() = architecture == "library"
+
+    // lowercase kebab-case for Maven artifactId convention
+    val projectArtifactId: String get() =
+        projectName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+
     fun toMustacheMap(): Map<String, Any> = mapOf(
-        "projectName"      to projectName,
-        "packageName"      to packageName,
-        "packagePath"      to packagePath,
-        "isLibrary"        to isLibrary,
-        "android"          to android,
-        "ios"              to ios,
-        "desktop"          to desktop,
-        "web"              to web,
-        "ktor"             to ktor,
-        "sqldelight"       to sqldelight,
-        "datastore"        to datastore,
-        "koin"             to koin,
-        "coil"             to coil,
-        "voyager"          to voyager,
-        "molecule"         to molecule,
-        "kotlinVersion"    to kotlinVersion,
-        "composeVersion"   to composeVersion,
-        "agpVersion"       to agpVersion,
-        "gradleVersion"    to gradleVersion,
-        "ktorVersion"      to ktorVersion,
+        "projectName"       to projectName,
+        "projectArtifactId" to projectArtifactId,
+        "packageName"       to packageName,
+        "packagePath"       to packagePath,
+        "android"           to android,
+        "ios"               to ios,
+        "desktop"           to desktop,
+        "web"               to web,
+        "ktor"              to ktor,
+        "sqldelight"        to sqldelight,
+        "datastore"         to datastore,
+        "koin"              to koin,
+        "coil"              to coil,
+        "voyager"           to voyager,
+        "molecule"          to molecule,
+        "kotlinVersion"     to kotlinVersion,
+        "composeVersion"    to composeVersion,
+        "agpVersion"        to agpVersion,
+        "gradleVersion"     to gradleVersion,
+        "ktorVersion"       to ktorVersion,
         "sqldelightVersion" to sqldelightVersion,
-        "koinVersion"      to koinVersion,
-        "coilVersion"      to coilVersion,
-        "voyagerVersion"   to voyagerVersion,
+        "koinVersion"       to koinVersion,
+        "coilVersion"       to coilVersion,
+        "voyagerVersion"    to voyagerVersion,
     )
 
     companion object {
@@ -62,7 +67,6 @@ data class TemplateContext(
             packageName  = req.packageName,
             packagePath  = req.packageName.replace('.', '/'),
             architecture = req.architecture,
-            isLibrary    = req.architecture == "library",
             android      = "android" in req.targets,
             ios          = "ios" in req.targets,
             desktop      = "desktop" in req.targets,

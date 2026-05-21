@@ -24,8 +24,8 @@ kotlin {
 {{/web}}
     sourceSets {
         commonMain.dependencies {
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+            api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+            api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
             implementation("com.russhwolf:multiplatform-settings:1.1.1")
 {{#ktor}}            implementation("io.ktor:ktor-client-core:{{ktorVersion}}")
@@ -62,7 +62,7 @@ kotlin {
 publishing {
     publications.withType<MavenPublication> {
         groupId = "{{packageName}}"
-        artifactId = "{{projectName}}"
+        artifactId = "{{projectArtifactId}}"
         version = "0.1.0"
     }
 }

@@ -346,6 +346,8 @@ private fun Step2Targets(s: WizardState, onChange: (WizardState) -> Unit) {
     }
 }
 
+private val uiOnlyLibs = setOf("coil", "voyager", "molecule")
+
 @Composable
 private fun Step3Architecture(s: WizardState, onChange: (WizardState) -> Unit) {
     val options = listOf(
@@ -358,17 +360,14 @@ private fun Step3Architecture(s: WizardState, onChange: (WizardState) -> Unit) {
         options.forEach { (id, title, desc) ->
             ArchRow(id, title, desc, s.architecture == id) {
                 val updated = s.copy(architecture = id)
-                // remove UI-only libs when switching to library mode
                 val sanitized = if (id == "library") updated.copy(
-                    libraries = updated.libraries - setOf("coil", "voyager", "molecule")
+                    libraries = updated.libraries - uiOnlyLibs
                 ) else updated
                 onChange(sanitized)
             }
         }
     }
 }
-
-private val uiOnlyLibs = setOf("coil", "voyager", "molecule")
 
 @Composable
 private fun Step4Libraries(s: WizardState, onChange: (WizardState) -> Unit) {
@@ -418,7 +417,7 @@ private fun Step5Summary(s: WizardState) {
         "Directory"    to "${s.parentDir}/${s.projectName}",
         "Package"      to s.packageName.ifBlank { derivePackage(s.projectName) },
         "Targets"      to s.targets.joinToString(", "),
-        "Type"         to if (s.architecture == "library") "Library / SDK" else s.architecture.replaceFirstChar { it.uppercase() },
+        "Architecture" to if (s.architecture == "library") "Library / SDK" else s.architecture.replaceFirstChar { it.uppercase() },
         "Libraries"    to s.libraries.joinToString(", ").ifBlank { "—" }
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
