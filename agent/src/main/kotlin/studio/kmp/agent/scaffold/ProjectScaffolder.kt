@@ -1,6 +1,7 @@
 package studio.kmp.agent.scaffold
 
 import com.samskivert.mustache.Mustache
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.InputStreamReader
 
@@ -11,6 +12,7 @@ class ProjectScaffolder {
         if (ctx.isLibrary) return manifestForLibrary(ctx)
         return buildList {
             // ── Common ────────────────────────────────────────────────────────────
+            add("common/gitignore" to ".gitignore")
             add("common/settings.gradle.kts" to "settings.gradle.kts")
             add("common/root.build.gradle.kts" to "build.gradle.kts")
             add("common/gradle.properties" to "gradle.properties")
@@ -72,6 +74,7 @@ class ProjectScaffolder {
     }
 
     private fun manifestForLibrary(ctx: TemplateContext): List<Pair<String, String>> = buildList {
+        add("common/gitignore" to ".gitignore")
         add("library/settings.gradle.kts" to "settings.gradle.kts")
         add("library/root.build.gradle.kts" to "build.gradle.kts")
         add("common/gradle.properties" to "gradle.properties")
@@ -99,6 +102,7 @@ class ProjectScaffolder {
         onProgress: suspend (filePath: String, done: Boolean, error: String?) -> Unit
     ) {
         val mustacheMap = ctx.toMustacheMap()
+        var errorCount = 0
 
         manifestFor(ctx).forEach { (resource, rawOutputPath) ->
             runCatching {
@@ -110,16 +114,28 @@ class ProjectScaffolder {
                 outputFile.writeText(rendered)
                 onProgress(outputPath, false, null)
             }.onFailure { e ->
+                if (e is CancellationException) throw e
+                errorCount++
                 onProgress(rawOutputPath, false, e.message)
             }
         }
 
-        // Copy Gradle wrapper from kmpstudio, then pin the exact version the AGP requires
-        copyGradleWrapper(projectDir)
-        writeGradleWrapperProperties(projectDir, ctx.gradleVersion)
-        writeLocalProperties(projectDir)
+        // Copy Gradle wrapper from kmpstudio, then pin the exact version the AGP requires.
+        // Wrapped so a failure here still emits done=true — otherwise the wizard hangs forever.
+        listOf(
+            "gradle wrapper"            to { copyGradleWrapper(projectDir) },
+            "gradle-wrapper.properties" to { writeGradleWrapperProperties(projectDir, ctx.gradleVersion) },
+            "local.properties"          to { writeLocalProperties(projectDir) },
+        ).forEach { (label, action) ->
+            runCatching { action() }.onFailure { e ->
+                if (e is CancellationException) throw e
+                errorCount++
+                onProgress(label, false, e.message)
+            }
+        }
 
-        onProgress("", true, null)
+        val finalError = if (errorCount > 0) "$errorCount file(s) failed to generate" else null
+        onProgress("", true, finalError)
     }
 
     private fun writeLocalProperties(projectDir: File) {
@@ -150,35 +166,53 @@ class ProjectScaffolder {
         val kmpRoot = generateSequence(File(javaClass.protectionDomain?.codeSource?.location?.toURI())) {
             it.parentFile
         }.take(10).firstOrNull { File(it, "gradle/wrapper/gradle-wrapper.jar").exists() }
-            ?: File(System.getProperty("user.dir"))
+            ?: error("gradle-wrapper.jar not found in kmpstudio install tree — wrapper copy aborted")
 
         // Copy only the wrapper JAR — NOT kmpstudio's custom gradlew (which hardcodes a Gradle path)
-        runCatching {
-            val wrapperJar = File(kmpRoot, "gradle/wrapper/gradle-wrapper.jar")
-            if (wrapperJar.exists()) {
-                val targetWrapper = File(projectDir, "gradle/wrapper")
-                targetWrapper.mkdirs()
-                wrapperJar.copyTo(File(targetWrapper, "gradle-wrapper.jar"), overwrite = true)
-            }
-        }
+        val wrapperJar = File(kmpRoot, "gradle/wrapper/gradle-wrapper.jar")
+        val targetWrapper = File(projectDir, "gradle/wrapper")
+        targetWrapper.mkdirs()
+        wrapperJar.copyTo(File(targetWrapper, "gradle-wrapper.jar"), overwrite = true)
 
-        // Write a proper standard gradlew script that reads gradle-wrapper.properties
+        // POSIX launcher
         val gradlew = File(projectDir, "gradlew")
         gradlew.writeText(STANDARD_GRADLEW)
         gradlew.setExecutable(true)
+
+        // Windows launcher
+        File(projectDir, "gradlew.bat").writeText(STANDARD_GRADLEW_BAT)
     }
 
     companion object {
-        // Standard Gradle wrapper script — reads gradle-wrapper.properties to determine which Gradle to download.
-        // Written verbatim so we never copy kmpstudio's custom hardcoded gradlew.
+        // Standard Gradle wrapper scripts — honour JAVA_HOME / JAVA_OPTS / GRADLE_OPTS like the
+        // official scripts; just much smaller. Written verbatim so we never copy kmpstudio's
+        // custom hardcoded gradlew.
         private val STANDARD_GRADLEW = """
             #!/bin/sh
             set -e
             APP_HOME=${'$'}( cd "${'$'}( dirname "${'$'}0" )" && pwd -P )
-            exec java \
+            if [ -n "${'$'}JAVA_HOME" ]; then
+                JAVACMD="${'$'}JAVA_HOME/bin/java"
+            else
+                JAVACMD="java"
+            fi
+            exec "${'$'}JAVACMD" ${'$'}JAVA_OPTS ${'$'}GRADLE_OPTS \
               -classpath "${'$'}APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
               org.gradle.wrapper.GradleWrapperMain "${'$'}@"
         """.trimIndent() + "\n"
+
+        private val STANDARD_GRADLEW_BAT = """
+            @echo off
+            setlocal
+            set DIRNAME=%~dp0
+            if defined JAVA_HOME (
+                set JAVA_EXE=%JAVA_HOME%\bin\java.exe
+            ) else (
+                set JAVA_EXE=java
+            )
+            "%JAVA_EXE%" %JAVA_OPTS% %GRADLE_OPTS% -classpath "%DIRNAME%gradle\wrapper\gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain %*
+            endlocal
+        """.trimIndent() + "\r\n"
     }
 
     private fun renderTemplate(arch: String, resource: String, ctx: Map<String, Any>): String {

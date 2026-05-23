@@ -22,6 +22,9 @@ import studio.kmp.frontend.ws.WsState
 import studio.kmp.shared.model.WsMessage
 import studio.kmp.shared.parser.LineType
 
+private val CORE_LIBS = setOf("coroutines", "serialization", "datetime", "settings")
+private val uiOnlyLibs = setOf("coil", "voyager", "molecule")
+
 private data class WizardState(
     val step: Int = 1,
     val projectName: String = "",
@@ -29,10 +32,11 @@ private data class WizardState(
     val packageName: String = "",
     val targets: Set<String> = setOf("android"),
     val architecture: String = "clean",
-    val libraries: Set<String> = setOf("coroutines", "serialization", "datetime", "settings"),
+    val libraries: Set<String> = CORE_LIBS,
     val generating: Boolean = false,
     val progress: List<LogEntry> = emptyList(),
     val done: Boolean = false,
+    val failed: Boolean = false,
     val aiMode: Boolean = false,
     val aiDescription: String = "",
     val aiThinking: Boolean = false,
@@ -57,28 +61,36 @@ fun NewProjectWizard(
         wsClient.messages.collect { msg ->
             when (msg) {
                 is WsMessage.ScaffoldProgress -> {
-                    @Suppress("UNCHECKED_CAST")
+                    val finalError = msg.done && msg.error != null
                     s = s.copy(
                         progress = s.progress + LogEntry(
                             text     = if (msg.error != null) "Error: ${msg.error}" else "Created: ${msg.filePath}",
                             lineType = if (msg.error != null) LineType.ERROR else LineType.SUCCESS
                         ),
-                        done = msg.done
+                        done       = msg.done,
+                        failed     = s.failed || finalError,
+                        generating = if (finalError) false else s.generating
                     )
-                    if (msg.done) {
+                    if (msg.done && msg.error == null) {
                         onComplete(ProjectState(s.projectName, "${s.parentDir}/${s.projectName}", s.targets.toList()))
                     }
                 }
                 is WsMessage.AiScaffoldConfig -> {
-                    val coreLibs = setOf("coroutines", "serialization", "datetime", "settings")
-                    val resolvedLibs = (coreLibs + msg.libraries.toSet()).let { libs ->
+                    val resolvedLibs = (CORE_LIBS + msg.libraries.toSet()).let { libs ->
                         if (msg.architecture == "library") libs - uiOnlyLibs else libs
+                    }
+                    // Defense in depth: prompt instructs the AI to avoid desktop/web on library
+                    // unless explicitly requested, but the model can ignore it. Force a sane default.
+                    val resolvedTargets = msg.targets.toSet().let { targets ->
+                        if (msg.architecture == "library" && targets.isEmpty()) {
+                            setOf("android", "ios")
+                        } else targets
                     }
                     s = s.copy(
                         aiThinking   = false,
                         projectName  = msg.projectName.ifBlank { s.projectName },
                         packageName  = msg.packageName,
-                        targets      = msg.targets.toSet(),
+                        targets      = resolvedTargets,
                         architecture = msg.architecture,
                         libraries    = resolvedLibs,
                         aiReasoning  = msg.reasoning,
@@ -105,7 +117,7 @@ fun NewProjectWizard(
 
             Box(modifier = Modifier.padding(28.dp).fillMaxWidth()) {
                 when {
-                    s.generating  -> GeneratingStep(s.progress)
+                    s.generating || s.failed -> GeneratingStep(s.progress)
                     s.aiThinking  -> AiThinkingStep()
                     s.step == 1   -> Step1Basics(s,       onChange = { s = it })
                     s.step == 2   -> Step2Targets(s,      onChange = { s = it })
@@ -115,7 +127,9 @@ fun NewProjectWizard(
                 }
             }
 
-            if (!s.generating && !s.aiThinking) {
+            if (s.failed) {
+                FailedNav(onClose = onCancel)
+            } else if (!s.generating && !s.aiThinking) {
                 WizardNav(
                     step    = s.step,
                     canNext = stepValid(s),
@@ -182,7 +196,9 @@ fun NewProjectWizard(
 // ─────────────────────────────────────────────────────────────────────────────
 
 private fun stepValid(s: WizardState): Boolean = when (s.step) {
-    1    -> s.projectName.isNotBlank() && s.parentDir.isNotBlank() &&
+    1    -> s.projectName.isNotBlank() &&
+            Regex("[a-zA-Z0-9]").containsMatchIn(s.projectName) &&
+            s.parentDir.isNotBlank() &&
             (!s.aiMode || s.aiDescription.isNotBlank())
     2    -> s.targets.isNotEmpty()
     else -> true
@@ -238,6 +254,22 @@ private fun WizardHeader(step: Int, generating: Boolean, aiMode: Boolean = false
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FailedNav(onClose: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(KmpCrust)
+            .padding(horizontal = 28.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.End
+    ) {
+        Button(
+            onClick = onClose,
+            colors  = ButtonDefaults.buttonColors(containerColor = KmpRed, contentColor = KmpCrust)
+        ) { Text("Close") }
     }
 }
 
@@ -349,15 +381,13 @@ private fun Step2Targets(s: WizardState, onChange: (WizardState) -> Unit) {
     }
 }
 
-private val uiOnlyLibs = setOf("coil", "voyager", "molecule")
-
 @Composable
 private fun Step3Architecture(s: WizardState, onChange: (WizardState) -> Unit) {
     val options = listOf(
-        Triple("library", "Library / SDK",    "No UI — publishable KMP module (AAR + XCFramework)"),
         Triple("clean",   "Clean Architecture", "Domain / Data / Presentation layers with Use Cases"),
         Triple("mvi",     "MVI",                "State + Intent + Effect sealed classes with a Store"),
-        Triple("mvvm",    "MVVM",               "ViewModel with StateFlow, minimal boilerplate")
+        Triple("mvvm",    "MVVM",               "ViewModel with StateFlow, minimal boilerplate"),
+        Triple("library", "Library / SDK",    "No UI — publishable KMP module (AAR + XCFramework)")
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         options.forEach { (id, title, desc) ->
@@ -375,13 +405,14 @@ private fun Step3Architecture(s: WizardState, onChange: (WizardState) -> Unit) {
 @Composable
 private fun Step4Libraries(s: WizardState, onChange: (WizardState) -> Unit) {
     val isLibrary = s.architecture == "library"
+    val coreLabels = mapOf(
+        "coroutines"    to "Kotlin Coroutines",
+        "serialization" to "Kotlin Serialization",
+        "datetime"      to "kotlinx-datetime",
+        "settings"      to "Multiplatform Settings"
+    )
     val groups = listOf(
-        "Core (always included)" to listOf(
-            "coroutines"    to "Kotlin Coroutines",
-            "serialization" to "Kotlin Serialization",
-            "datetime"      to "kotlinx-datetime",
-            "settings"      to "Multiplatform Settings"
-        ),
+        "Core (always included)" to CORE_LIBS.map { it to (coreLabels[it] ?: it) },
         "Network + Data" to listOf(
             "ktor"       to "Ktor Client",
             "sqldelight" to "SQLDelight",

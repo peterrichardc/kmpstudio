@@ -31,6 +31,8 @@ import studio.kmp.shared.model.*
 import java.io.File
 import kotlin.time.Duration.Companion.seconds
 
+private val PACKAGE_NAME_REGEX = Regex("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
+
 fun main() {
     embeddedServer(Netty, port = 8765, host = "127.0.0.1", module = Application::module)
         .start(wait = true)
@@ -142,14 +144,11 @@ fun Application.module() {
                 ChatMessage("assistant", aiText) +
                 ChatMessage("user", "Build failed. Fix these compilation errors:\n\n$errors")
             currentPrompt = "Fix the compilation errors listed above."
-            // Resolve relative paths from AI diffs to absolute so readFilesAsContext can find them
+            // Resolve relative paths from AI diffs to absolute so readFilesAsContext can find them.
+            // projectRoot is guaranteed non-null here (line 114 returned otherwise).
             currentPaths = diffs.map { diff ->
                 val p = diff.filePath
-                when {
-                    p.startsWith("/") -> p
-                    projectRoot != null -> "$projectRoot/$p"
-                    else -> p
-                }
+                if (p.startsWith("/")) p else "$projectRoot/$p"
             }
         }
     }
@@ -264,7 +263,13 @@ fun Application.module() {
                             }
 
                             is WsMessage.ScaffoldRequest -> {
-                                agentScope.launch {
+                                val scaffoldId = "scaffold:${msg.projectName}"
+                                val job = agentScope.launch {
+                                    if (!PACKAGE_NAME_REGEX.matches(msg.packageName)) {
+                                        send(json.encodeToString(WsMessage.serializer(),
+                                            WsMessage.ErrorMsg("Invalid package name: must match Java package convention")))
+                                        return@launch
+                                    }
                                     val ctx = TemplateContext.from(msg)
                                     val projectDir = File(msg.parentDir, msg.projectName)
                                     val parentCanonical = File(msg.parentDir).canonicalPath
@@ -274,12 +279,18 @@ fun Application.module() {
                                             WsMessage.ErrorMsg("Invalid project name: path traversal detected")))
                                         return@launch
                                     }
+                                    val createdFresh = !projectDir.exists()
                                     projectDir.mkdirs()
                                     scaffolder.scaffold(ctx, projectDir) { filePath, done, error ->
+                                        if (done && error != null && createdFresh) {
+                                            projectDir.deleteRecursively()
+                                        }
                                         send(json.encodeToString(WsMessage.serializer(),
                                             WsMessage.ScaffoldProgress(filePath, done, error)))
                                     }
                                 }
+                                sessionManager.register(scaffoldId, job)
+                                job.invokeOnCompletion { sessionManager.cancel(scaffoldId) }
                             }
 
                             is WsMessage.AiScaffoldRequest -> {

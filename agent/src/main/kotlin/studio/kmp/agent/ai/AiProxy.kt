@@ -167,7 +167,7 @@ class AiProxy(private val fsAgent: FileSystemAgent) {
             You are a Kotlin Multiplatform expert. Given an app description, return a JSON scaffold configuration.
 
             Available targets: android, ios, desktop, web
-            Available architectures: clean, mvvm, mvi
+            Available architectures: clean, mvvm, mvi, library
             Available optional libraries: ktor, sqldelight, datastore, koin, coil, voyager, molecule
             Core libraries (always included, do NOT list): coroutines, serialization, datetime, settings
 
@@ -178,7 +178,8 @@ class AiProxy(private val fsAgent: FileSystemAgent) {
             - projectName: PascalCase, no spaces (use hint if provided)
             - packageName: all-lowercase, reverse-domain style
             - targets: mobile → android+ios; cross-platform → add desktop; web presence → add web
-            - architecture: clean for complex apps; mvvm for simple CRUD; mvi for reactive/event-driven
+            - architecture: library for SDKs/libraries published as Maven artifacts; clean for complex apps; mvvm for simple CRUD; mvi for reactive/event-driven
+            - library architecture: include only targets that consumers will actually need (e.g. android+ios for a mobile SDK, add desktop/web only if explicitly requested); never include coil/voyager/molecule (UI-only)
             - ktor: remote API calls; sqldelight: local DB; datastore: prefs/settings; koin: DI for medium+ apps
             - coil: network images; voyager: multi-screen navigation; molecule: complex reactive state
         """.trimIndent()

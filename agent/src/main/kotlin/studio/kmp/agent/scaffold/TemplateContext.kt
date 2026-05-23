@@ -30,9 +30,13 @@ data class TemplateContext(
 ) {
     val isLibrary: Boolean get() = architecture == "library"
 
-    // lowercase kebab-case for Maven artifactId convention
+    // lowercase kebab-case for Maven artifactId convention; falls back to "library"
+    // when the project name contains no alphanumeric characters.
     val projectArtifactId: String get() =
-        projectName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+        projectName.lowercase()
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+            .ifBlank { "library" }
 
     fun toMustacheMap(): Map<String, Any> = mapOf(
         "projectName"       to projectName,
@@ -62,22 +66,31 @@ data class TemplateContext(
     )
 
     companion object {
-        fun from(req: WsMessage.ScaffoldRequest) = TemplateContext(
-            projectName  = req.projectName,
-            packageName  = req.packageName,
-            packagePath  = req.packageName.replace('.', '/'),
-            architecture = req.architecture,
-            android      = "android" in req.targets,
-            ios          = "ios" in req.targets,
-            desktop      = "desktop" in req.targets,
-            web          = "web" in req.targets,
-            ktor         = "ktor" in req.libraries,
-            sqldelight   = "sqldelight" in req.libraries,
-            datastore    = "datastore" in req.libraries,
-            koin         = "koin" in req.libraries,
-            coil         = "coil" in req.libraries,
-            voyager      = "voyager" in req.libraries,
-            molecule     = "molecule" in req.libraries,
-        )
+        private val UI_ONLY_LIBS = setOf("coil", "voyager", "molecule")
+
+        fun from(req: WsMessage.ScaffoldRequest): TemplateContext {
+            // UI-only libs are meaningless for a library/SDK build and have no template blocks
+            // in library/*.mustache — strip them server-side so a sneaky client can't request them.
+            val libs = req.libraries.toSet().let { s ->
+                if (req.architecture == "library") s - UI_ONLY_LIBS else s
+            }
+            return TemplateContext(
+                projectName  = req.projectName,
+                packageName  = req.packageName,
+                packagePath  = req.packageName.replace('.', '/'),
+                architecture = req.architecture,
+                android      = "android" in req.targets,
+                ios          = "ios" in req.targets,
+                desktop      = "desktop" in req.targets,
+                web          = "web" in req.targets,
+                ktor         = "ktor" in libs,
+                sqldelight   = "sqldelight" in libs,
+                datastore    = "datastore" in libs,
+                koin         = "koin" in libs,
+                coil         = "coil" in libs,
+                voyager      = "voyager" in libs,
+                molecule     = "molecule" in libs,
+            )
+        }
     }
 }

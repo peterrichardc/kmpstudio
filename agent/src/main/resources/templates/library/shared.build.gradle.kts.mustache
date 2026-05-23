@@ -24,10 +24,12 @@ kotlin {
 {{/web}}
     sourceSets {
         commonMain.dependencies {
+            // `api` for types that appear in the SDK's public surface (Flow, Instant, etc.).
+            // `implementation` for libs only used internally — change to `api` if you expose them.
             api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-            api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
-            implementation("com.russhwolf:multiplatform-settings:1.1.1")
+            api("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+            implementation("com.russhwolf:multiplatform-settings:1.2.0")
 {{#ktor}}            implementation("io.ktor:ktor-client-core:{{ktorVersion}}")
             implementation("io.ktor:ktor-client-content-negotiation:{{ktorVersion}}")
             implementation("io.ktor:ktor-serialization-kotlinx-json:{{ktorVersion}}")
@@ -60,9 +62,13 @@ kotlin {
 }
 {{/sqldelight}}
 publishing {
-    publications.withType<MavenPublication> {
+    publications.withType<MavenPublication>().configureEach {
         groupId = "{{packageName}}"
-        artifactId = "{{projectArtifactId}}"
         version = "0.1.0"
+        artifactId = when (name) {
+            "kotlinMultiplatform" -> "{{projectArtifactId}}"
+            "androidRelease"      -> "{{projectArtifactId}}-android"
+            else                  -> "{{projectArtifactId}}-${name.lowercase()}"
+        }
     }
 }
