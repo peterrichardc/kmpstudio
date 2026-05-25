@@ -92,6 +92,13 @@ Describe your app in plain English. KMP Studio picks the right architecture, tar
 
 Choose MVVM, MVI, or Clean Architecture. Add Ktor, SQLDelight, Koin, Coil, Voyager — all versions pinned and verified to work together. Generation streams live to the log, file by file.
 
+### App or Library/SDK
+
+Pick the project type in the wizard:
+
+- **Application** — full KMP app with the UI targets you choose (Android, iOS, Desktop, Web) and your architecture of choice
+- **Library / SDK** — headless KMP module with `maven-publish` pre-wired, platform `actual` stubs, and a sample `SdkClient` entry point. UI-only libraries (Coil, Voyager, Molecule) are automatically disabled — you ship a clean SDK, not an app skeleton
+
 Every generated file comes from a `.mustache` template. Drop your own into `~/.kmpstudio/templates/` to override any built-in — enforce your folder structure, pre-wire your design system, ship team-wide starters.
 
 ---
