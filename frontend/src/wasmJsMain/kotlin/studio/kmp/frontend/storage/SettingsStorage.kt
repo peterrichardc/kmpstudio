@@ -3,6 +3,7 @@ package studio.kmp.frontend.storage
 import kotlinx.browser.localStorage
 import kotlinx.serialization.json.*
 import studio.kmp.frontend.ui.ProjectState
+import studio.kmp.shared.model.ChatMessage
 
 object SettingsStorage {
     private const val K_CLAUDE  = "kmp_claude_key"
@@ -41,7 +42,8 @@ object SettingsStorage {
         get() = localStorage.getItem(K_PORT)?.toIntOrNull() ?: 8765
         set(v) { localStorage.setItem(K_PORT, v.toString()) }
 
-    private const val K_RECENTS  = "kmp_recent_projects"
+    private const val K_RECENTS     = "kmp_recent_projects"
+    private const val K_CHAT_PREFIX = "kmp_chat_"
 
     var recentProjects: List<ProjectState>
         get() = runCatching {
@@ -70,6 +72,36 @@ object SettingsStorage {
         recentProjects = (listOf(project) + recentProjects)
             .distinctBy { it.path }
             .take(10)
+    }
+
+    fun chatHistory(projectPath: String): List<ChatMessage> =
+        runCatching {
+            Json.parseToJsonElement(localStorage.getItem("$K_CHAT_PREFIX$projectPath") ?: "[]")
+                .jsonArray
+                .map {
+                    ChatMessage(
+                        role    = it.jsonObject["role"]!!.jsonPrimitive.content,
+                        content = it.jsonObject["content"]!!.jsonPrimitive.content
+                    )
+                }
+        }.getOrDefault(emptyList())
+
+    fun saveChatHistory(projectPath: String, history: List<ChatMessage>) {
+        if (history.isEmpty()) {
+            localStorage.removeItem("$K_CHAT_PREFIX$projectPath")
+            return
+        }
+        runCatching {
+            val json = buildJsonArray {
+                history.takeLast(100).forEach { m ->
+                    addJsonObject {
+                        put("role", m.role)
+                        put("content", m.content)
+                    }
+                }
+            }
+            localStorage.setItem("$K_CHAT_PREFIX$projectPath", json.toString())
+        }
     }
 
     fun activeApiKey(): String = when (aiProvider) {

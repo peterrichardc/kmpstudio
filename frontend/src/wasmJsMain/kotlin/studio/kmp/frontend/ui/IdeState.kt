@@ -70,7 +70,9 @@ class IdeState(
     var expandedDirs by mutableStateOf(setOf(project.path))
 
     val conversationId = Random.nextLong().toULong().toString(16)
-    val chatHistory    = mutableStateListOf<ChatMessage>()
+    val chatHistory    = mutableStateListOf<ChatMessage>().apply {
+        addAll(SettingsStorage.chatHistory(project.path))
+    }
 
     var showRunMenu      by mutableStateOf(false)
     var showNewAvdDialog by mutableStateOf(false)

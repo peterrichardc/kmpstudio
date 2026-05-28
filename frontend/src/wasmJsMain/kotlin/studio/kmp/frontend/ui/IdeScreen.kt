@@ -32,6 +32,14 @@ fun IdeScreen(
 
     IdeMessageRouter(state)
 
+    LaunchedEffect(state) {
+        var initial = true
+        snapshotFlow { state.chatHistory.toList() }.collect { history ->
+            if (initial) { initial = false; return@collect }
+            SettingsStorage.saveChatHistory(state.project.path, history)
+        }
+    }
+
     SideEffect {
         setEditorVisible(
             state.editorId,
